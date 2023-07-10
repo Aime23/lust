@@ -208,14 +208,22 @@ impl BucketController {
             return Ok(Some(StoreEntry { data, kind: retrieved_kind, sizing_id }))
         }
 
-        let pipeline = self.pipeline.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            pipeline.on_fetch(desired_kind, retrieved_kind, data, sizing_id, custom_sizing)
-        }).await??;
-
-        self.concurrent_upload(image_id, result.result.to_store).await?;
-
-        Ok(result.result.response)
+        if retrieved_kind != desired_kind {
+            let pipeline = self.pipeline.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                pipeline.on_fetch(desired_kind, retrieved_kind, data, sizing_id, custom_sizing)
+            }).await??;
+            
+            self.concurrent_upload(image_id, result.result.to_store).await?;
+            
+            return Ok(result.result.response);
+        } else {
+            return Ok(Some(StoreEntry {
+                kind: retrieved_kind,
+                data: data,
+                sizing_id: sizing_id,
+            }))
+        }
     }
 
     pub async fn delete(&self, image_id: Uuid) -> anyhow::Result<()> {
